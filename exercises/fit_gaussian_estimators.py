@@ -22,8 +22,10 @@ def test_univariate_gaussian():
         univariate_gaussian.fit(X[:m])
         estimated_mean.append(np.abs(univariate_gaussian.mu_ - mu))
     go.Figure(go.Scatter(x=ms, y=estimated_mean, mode='markers+lines', name=r'Absolute Difference'),
-              layout=go.Layout(title=r"$\text{Absolute distance between the estimated and true value of the expectation as a function of the sample size}$",
-                               xaxis_title="$m\\text{ - number of samples}$", yaxis_title="r$|\hat\mu-\mu|$", height=300)).show()
+              layout=go.Layout(title=r"$\text{Absolute distance between the estimated and true value of the"
+                                     r" expectation as a function of the sample size}$",
+                               xaxis_title="$m\\text{ - number of samples}$", yaxis_title="r$|\hat\mu-\mu|$",
+                               height=300)).show()
 
     # Question 3 - Plotting Empirical PDF of fitted model
     X.sort()
