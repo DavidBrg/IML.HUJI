@@ -36,16 +36,24 @@ def run_perceptron():
     Create a line plot that shows the perceptron algorithm's training loss values (y-axis)
     as a function of the training iterations (x-axis).
     """
-    for n, f in [("Linearly Separable", "linearly_separable.npy"), ("Linearly Inseparable", "linearly_inseparable.npy")]:
+    for n, f in [("Linearly Separable", "linearly_separable.npy"),
+                 ("Linearly Inseparable", "linearly_inseparable.npy")]:
         # Load dataset
-        raise NotImplementedError()
+        X, y = load_dataset("../datasets/" + f)
 
         # Fit Perceptron and record loss in each fit iteration
         losses = []
-        raise NotImplementedError()
 
-        # Plot figure of loss as function of fitting iteration
-        raise NotImplementedError()
+        def loss_callback(p, data, sample):
+            losses.append(p.loss(X, y))
+
+        Perceptron(callback=loss_callback).fit(X, y)
+
+        fig = go.Figure(go.Scatter(x=list(range(len(losses))), y=losses, mode='lines'),
+                        layout=go.Layout(title=f"{n} Loss as function of fitting iteration",
+                                         xaxis_title="Iteration", yaxis_title="Loss"))
+        fig.write_image(f"{n}_Loss_as_function_of_fitting_iteration.png")
+        fig.show()
 
 
 def get_ellipse(mu: np.ndarray, cov: np.ndarray):
@@ -70,7 +78,7 @@ def get_ellipse(mu: np.ndarray, cov: np.ndarray):
     xs = (l1 * np.cos(theta) * np.cos(t)) - (l2 * np.sin(theta) * np.sin(t))
     ys = (l1 * np.sin(theta) * np.cos(t)) + (l2 * np.cos(theta) * np.sin(t))
 
-    return go.Scatter(x=mu[0] + xs, y=mu[1] + ys, mode="lines", marker_color="black")
+    return go.Scatter(x=mu[0] + xs, y=mu[1] + ys, mode="lines", marker_color="black", showlegend=False)
 
 
 def compare_gaussian_classifiers():
@@ -79,25 +87,53 @@ def compare_gaussian_classifiers():
     """
     for f in ["gaussian1.npy", "gaussian2.npy"]:
         # Load dataset
-        raise NotImplementedError()
+        X, y = load_dataset("../datasets/" + f)
 
         # Fit models and predict over training set
-        raise NotImplementedError()
+        lda = LDA()
+        gnb = GaussianNaiveBayes()
+
+        lda.fit(X, y)
+        gnb.fit(X, y)
+
+        y_lda = lda.predict(X)
+        y_gnb = gnb.predict(X)
 
         # Plot a figure with two suplots, showing the Gaussian Naive Bayes predictions on the left and LDA predictions
         # on the right. Plot title should specify dataset used and subplot titles should specify algorithm and accuracy
         # Create subplots
         from IMLearn.metrics import accuracy
-        raise NotImplementedError()
-
+        lims = np.array([X.min(axis=0), X.max(axis=0)]).T + np.array([-.4, .4])
+        subplots = make_subplots(rows=1, cols=2, subplot_titles=[f"GNB Model, Accuracy: {accuracy(y, y_gnb)}",
+                                                                 f"LDA Model, Accuracy: {accuracy(y, y_lda)}"],
+                                 horizontal_spacing=0.01, vertical_spacing=.03)
+        subplots.update_layout(title=f"Decision Boundaries Of Models on {f} Dataset",
+                               margin=dict(t=100, )).update_xaxes(visible=False).update_yaxes(visible=False)
+        data = [[], []]
         # Add traces for data-points setting symbols and colors
-        raise NotImplementedError()
+        for i, model in enumerate([gnb, lda]):
+            y_predict = model.fit(X, y).predict(X)
+            data[i] = [decision_surface(model.fit(X, y).predict, lims[0], lims[1], showscale=False),
+                       go.Scatter(x=X[:, 0], y=X[:, 1], mode="markers", showlegend=False,
+                                  marker=dict(color=y_predict, symbol=class_symbols[y], colorscale=class_colors(3),
+                                              line=dict(color="black", width=1)))]
 
-        # Add `X` dots specifying fitted Gaussians' means
-        raise NotImplementedError()
+            # Add `X` dots specifying fitted Gaussians' means
+            data[i].append(go.Scatter(x=model.mu_[:, 0], y=model.mu_[:, 1], mode="markers", showlegend=False,
+                                      marker=dict(color="black", symbol="x")))
 
-        # Add ellipses depicting the covariances of the fitted Gaussians
-        raise NotImplementedError()
+            # Add ellipses depicting the covariances of the fitted Gaussians
+            for j in range(len(model.mu_)):
+                if model == gnb:
+                    cov = np.diag(gnb.vars_[j])
+                else:
+                    cov = lda.cov_
+                data[i].append(get_ellipse(model.mu_[j], cov))
+
+            subplots.add_traces(data[i], rows=1, cols=1 + i)
+
+        subplots.write_image(f"{f}_decision_boundary.png")
+        subplots.show()
 
 
 if __name__ == '__main__':

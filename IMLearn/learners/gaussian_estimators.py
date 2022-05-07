@@ -1,7 +1,4 @@
 from __future__ import annotations
-
-import math
-
 import numpy as np
 from numpy.linalg import inv, det, slogdet
 
@@ -55,11 +52,16 @@ class UnivariateGaussian:
         Sets `self.mu_`, `self.var_` attributes according to calculated estimation (where
         estimator is either biased or unbiased). Then sets `self.fitted_` attribute to `True`
         """
-        self.mu_ = np.mean(X)
-        if self.biased_:
-            self.var_ = np.var(X)
-        else:
-            self.var_ = np.var(X, ddof=1)
+        # self.mu_ = np.mean(X)
+        # if self.biased_:
+        #     self.var_ = np.var(X)
+        # else:
+        #     self.var_ = np.var(X, ddof=1)
+        # self.fitted_ = True
+        # return self
+        self.mu_ = X.mean()
+        m = len(X) if self.biased_ else len(X) - 1
+        self.var_ = np.sum((X - self.mu_) ** 2) / m
         self.fitted_ = True
         return self
 
@@ -83,7 +85,8 @@ class UnivariateGaussian:
         """
         if not self.fitted_:
             raise ValueError("Estimator must first be fitted before calling `pdf` function")
-        return np.exp(-((X - self.mu_) ** 2) / (2 * self.var_)) / ((2 * np.pi * self.var_) ** 0.5)
+        # return np.exp(-((X - self.mu_) ** 2) / (2 * self.var_)) / ((2 * np.pi * self.var_) ** 0.5)
+        return np.exp(- (X - self.mu_) ** 2 / (2 * self.var_)) / np.sqrt(2 * np.pi * self.var_)
 
     @staticmethod
     def log_likelihood(mu: float, sigma: float, X: np.ndarray) -> float:
@@ -104,7 +107,8 @@ class UnivariateGaussian:
         log_likelihood: float
             log-likelihood calculated
         """
-        return -(np.log(2 * np.pi * sigma) * (X.size / 2)) - ((np.sum((X - mu) ** 2)) / (2 * sigma))
+        # return -(np.log(2 * np.pi * sigma) * (X.size / 2)) - ((np.sum((X - mu) ** 2)) / (2 * sigma))
+        return -np.sum((X - mu) ** 2) / (2 * sigma) - np.log(2 * np.pi * sigma) * (len(X) / 2)
 
 
 class MultivariateGaussian:
@@ -151,8 +155,12 @@ class MultivariateGaussian:
         Sets `self.mu_`, `self.cov_` attributes according to calculated estimation.
         Then sets `self.fitted_` attribute to `True`
         """
-        self.mu_ = np.mean(X, axis=0)
-        self.cov_ = np.cov(X, ddof=1, rowvar=False)
+        # self.mu_ = np.mean(X, axis=0)
+        # self.cov_ = np.cov(X, ddof=1, rowvar=False)
+        # self.fitted_ = True
+        # return self
+        self.mu_ = X.mean(axis=0)
+        self.cov_ = (X - self.mu_).T @ (X - self.mu_) / (len(X) - 1)
         self.fitted_ = True
         return self
 
@@ -176,8 +184,18 @@ class MultivariateGaussian:
         """
         if not self.fitted_:
             raise ValueError("Estimator must first be fitted before calling `pdf` function")
-        coefficient = (((2 * np.pi) ** X.shape[1]) * det(self.cov_)) ** 0.5
-        return np.array([np.exp((-0.5) * x.T @ inv(self.cov_) @ x) for x in (X - self.mu_)]) / coefficient
+        # coefficient = (((2 * np.pi) ** X.shape[1]) * det(self.cov_)) ** 0.5
+        # return np.array([np.exp((-0.5) * x.T @ inv(self.cov_) @ x) for x in (X - self.mu_)]) / coefficient
+
+        # Option 1: broadcast X such that its dimensions are: (n_samples, 1, n_features) and then use np.dot
+        # to perform matrix multiplication over the last 2 dimensions
+        d = X[:, np.newaxis, :] - self.mu_
+        mahalanobis = np.sum(d.dot(inv(self.cov_)) * d, axis=2).flatten()
+
+        # Option 2: using np.einsum
+        mahalanobis = np.einsum("bi,ij,bj->b", X - self.mu_, inv(self.cov_), X - self.mu_)
+
+        return np.exp(-.5 * mahalanobis) / np.sqrt((2 * np.pi) ** len(X) * det(self.cov_))
 
     @staticmethod
     def log_likelihood(mu: np.ndarray, cov: np.ndarray, X: np.ndarray) -> float:
@@ -198,7 +216,17 @@ class MultivariateGaussian:
         log_likelihood: float
             log-likelihood calculated over all input data and under given parameters of Gaussian
         """
-        XminusMu = X - mu
-        temp = np.sum(XminusMu @ inv(cov) * XminusMu)
-        return (-(X.shape[0] * X.shape[1] * np.log(2 * np.pi)) - (X.shape[0] * np.log(det(cov))) - temp) / 2
+        # XminusMu = X - mu
+        # temp = np.sum(XminusMu @ inv(cov) * XminusMu)
+        # return (-(X.shape[0] * X.shape[1] * np.log(2 * np.pi)) - (X.shape[0] * np.log(det(cov))) - temp) / 2
 
+        # Option 1: broadcast X such that its dimensions are: (n_samples, 1, n_features) and then use np.dot
+        # to perform matrix multiplication over the last 2 dimensions
+        d = X[:, np.newaxis, :] - mu
+        mahalanobis = np.sum(d.dot(inv(cov)) * d)
+
+        # Option 2: using np.einsum
+        mahalanobis = np.einsum("bi,ij,bj", X - mu, inv(cov), X - mu)
+
+        # Complete log likelihood value
+        return -(mahalanobis + len(X) * slogdet(cov)[1] + len(X) * X.shape[1] * np.log(2 * np.pi)) / 2
