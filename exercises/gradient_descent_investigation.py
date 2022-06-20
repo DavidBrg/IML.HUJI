@@ -73,25 +73,91 @@ def get_gd_state_recorder_callback() -> Tuple[Callable[[], None], List[np.ndarra
     weights: List[np.ndarray]
         Recorded parameters
     """
-    raise NotImplementedError()
+    values, weights = [], []
+
+    def gd_state_recorder_callback(solver, **kwargs):
+        values.append(kwargs['val'])
+        weights.append(kwargs['weights'])
+
+    return gd_state_recorder_callback, values, weights
 
 
 def compare_fixed_learning_rates(init: np.ndarray = np.array([np.sqrt(2), np.e / 3]),
                                  etas: Tuple[float] = (1, .1, .01, .001)):
-    raise NotImplementedError()
+
+    for eta in etas:
+        for module in {L1, L2}:
+            callback, values, weights = get_gd_state_recorder_callback()
+            gd = GradientDescent(FixedLR(eta), callback=callback)
+            gd.fit(module(init), None, None)
+            name = f"| Module: {module.__name__} | Eta: {eta}"
+            if eta == .01:
+                plot_descent_path(module, np.array(weights), name).show()
+            go.Figure(go.Scatter(x=np.arange(len(values)), y=values, mode="markers+lines",
+                                 name=f"Convergence rate: {name}")).show()
+            print(f"Minimal value for {name}: {min(values)}")
 
 
 def compare_exponential_decay_rates(init: np.ndarray = np.array([np.sqrt(2), np.e / 3]),
                                     eta: float = .1,
                                     gammas: Tuple[float] = (.9, .95, .99, 1)):
-    # Optimize the L1 objective using different decay-rate values of the exponentially decaying learning rate
-    raise NotImplementedError()
+    # # Optimize the L1 objective using different decay-rate values of the exponentially decaying learning rate
+    # subplots = []
+    # for gamma in gammas:
+    #     callback, values, weights = get_gd_state_recorder_callback()
+    #     gd = GradientDescent(ExponentialLR(eta, gamma), callback=callback)
+    #     gd.fit(L1(init), None, None)
+    #     name = f"ExponentialLR | Eta: {eta} | Gamma: {gamma}"
+    #     subplots.append(go.Scatter(x=np.arange(len(values)), y=values, mode="markers+lines", name=name))
+    #     print(f"")
+    #
+    # # Plot algorithm's convergence for the different values of gamma
+    # go.Figure(subplots).show()
+    #
+    # # Plot descent path for gamma=0.95
+    # for module in {L1, L2}:
+    #     callback, values, weights = get_gd_state_recorder_callback()
+    #     gd = GradientDescent(ExponentialLR(eta, 0.95), callback=callback)
+    #     gd.fit(module(init), None, None)
+    #     name = f"| Module: {module.__name__} | Eta: {eta} | Gamma: 0.95"
+    #     plot_descent_path(module, np.array(weights), name).show()
 
-    # Plot algorithm's convergence for the different values of gamma
-    raise NotImplementedError()
+
+
+    values_per_gamma = []
+    min_of_l1 = np.inf
+    min_gamma = 0
+    for gamma in gammas:
+        cb_l1, values_l1, weights_l1 = get_gd_state_recorder_callback()
+        gd_l1 = GradientDescent(learning_rate=ExponentialLR(eta, gamma),
+                                callback=cb_l1)
+        gd_l1.fit(L1(init), X=None, y=None)
+        values_per_gamma.append(values_l1)
+        if min_of_l1 > np.min(values_l1):
+            min_of_l1 = np.min(values_l1)
+            min_gamma = gamma
+    iters = len(values_per_gamma[0])
+    conv_fig = go.Figure(data=[go.Scatter(x=[i for i in range(iters)], y=value,
+                                          name=f"CR with gamma = {gammas[j]}",
+                                          mode="markers+lines")
+                               for j, value in enumerate(values_per_gamma)])
+    conv_fig.update_layout(title="EX5", xaxis_title="GD iteration",
+                           yaxis_title="norm value")
+    conv_fig.show()
+    print(f"min of l_1 for all decay rates is {min_of_l1} "
+          f"for gamma {min_gamma}")
 
     # Plot descent path for gamma=0.95
-    raise NotImplementedError()
+    for module in [L1, L2]:
+        cb_l1, values_l1, weights_l1 = get_gd_state_recorder_callback()
+        gd_l1 = GradientDescent(learning_rate=ExponentialLR(eta, 0.95),
+                                callback=cb_l1)
+        gd_l1.fit(module(init), X=None, y=None)
+        f1 = plot_descent_path(module, np.array(weights_l1),
+                               f"decent path for "
+                               f"{module.__name__} module with eta={0.1}"
+                               f", gamma = 0.95")
+        f1.show()
 
 
 def load_data(path: str = "../datasets/SAheart.data", train_portion: float = .8) -> \
@@ -131,7 +197,32 @@ def fit_logistic_regression():
     X_train, y_train, X_test, y_test = load_data()
 
     # Plotting convergence rate of logistic regression over SA heart disease data
-    raise NotImplementedError()
+    lr = LogisticRegression(GradientDescent(learning_rate=FixedLR(1e-4), max_iter=20000))
+    log_reg.fit(X_train.to_numpy(), y_train.to_numpy())
+    print("fitted")
+    from sklearn.metrics import roc_curve, auc
+    fpr, tpr, thresholds = roc_curve(y_train.to_numpy(),
+                                     log_reg.predict_proba(X_train.to_numpy()),
+                                     drop_intermediate=True)
+    roc = go.Figure(
+        data=[go.Scatter(x=[0, 1], y=[0, 1], mode="lines",
+                         line=dict(color="black", dash='dash'),
+                         name="Random Class Assignment"),
+              go.Scatter(x=fpr, y=tpr, mode='markers+lines', text=thresholds,
+                         name="", showlegend=False, marker_size=5,
+                         hovertemplate="<b>Threshold:</b>%{text:.3f}<br>FPR:"
+                                       " %{x:.3f}<br>TPR: %{y:.3f}")],
+        layout=go.Layout(
+            title=rf"$\text{{ROC Curve Of Fitted Model - AUC}}="
+                  rf"{auc(fpr, tpr):.6f}$",
+            xaxis=dict(title=r"$\text{False Positive Rate (FPR)}$"),
+            yaxis=dict(title=r"$\text{True Positive Rate (TPR)}$")))
+    roc.write_image(f"ex6/Q9/ROC.jpeg")
+    alpha_star = thresholds[np.argmax((tpr - fpr))]
+    print(alpha_star)
+    log_alpha_star = LogisticRegression(alpha=alpha_star)
+    log_alpha_star.fit(X_train.to_numpy(), y_train.to_numpy())
+    print(log_alpha_star.loss(X_test.to_numpy(), y_test.to_numpy()))
 
     # Fitting l1- and l2-regularized logistic regression models, using cross-validation to specify values
     # of regularization parameter
@@ -140,6 +231,6 @@ def fit_logistic_regression():
 
 if __name__ == '__main__':
     np.random.seed(0)
-    compare_fixed_learning_rates()
+    # compare_fixed_learning_rates()
     compare_exponential_decay_rates()
-    fit_logistic_regression()
+    # fit_logistic_regression()

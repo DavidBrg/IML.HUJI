@@ -48,7 +48,16 @@ class LogisticRegression(BaseEstimator):
         Fits model using specified `self.optimizer_` passed when instantiating class and includes an intercept
         if specified by `self.include_intercept_
         """
-        raise NotImplementedError()
+        weights = np.random.normal(0, 1, size=(X.shape[0],)) * (1 / np.sqrt(X.shape[0]))
+        if self.penalty_ == "l1":
+            module = RegularizedModule(LogisticModule(weights), L1(weights), self.lam_, weights,
+                                       self.include_intercept_)
+        elif self.penalty_ == "l2":
+            module = RegularizedModule(LogisticModule(weights), L2(weights), self.lam_, weights,
+                                       self.include_intercept_)
+        else:
+            module = LogisticModule(weights)
+        self.coefs_ = self.solver_.fit(module, X, y)
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -64,7 +73,7 @@ class LogisticRegression(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        raise NotImplementedError()
+        return np.where((X @ self.coefs_) >= self.alpha_, 1, 0)
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """
@@ -80,7 +89,7 @@ class LogisticRegression(BaseEstimator):
         probabilities: ndarray of shape (n_samples,)
             Probability of each sample being classified as `1` according to the fitted model
         """
-        raise NotImplementedError()
+        return np.apply_along_axis(lambda x: 1 / (1 + np.exp(-x)), 0, X @ self.coefs_)
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
@@ -99,4 +108,5 @@ class LogisticRegression(BaseEstimator):
         loss : float
             Performance under misclassification error
         """
-        raise NotImplementedError()
+        from ...metrics.loss_functions import misclassification_error
+        return misclassification_error(y, self._predict(X))
