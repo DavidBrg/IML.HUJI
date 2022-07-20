@@ -122,7 +122,7 @@ class GradientDescent:
         """
         i = 0
         best_weights = f.weights
-        best_output = f.compute_output()
+        best_output = f.compute_output(X=X, y=y)
         sum_weights = f.weights
         delta = np.inf
         while i < self.max_iter_ and delta > self.tol_:
@@ -131,10 +131,10 @@ class GradientDescent:
             f.weights = f.weights - (eta * f.compute_jacobian(X=X, y=y))
             delta = np.linalg.norm(f.weights - prev_weights)
             sum_weights = sum_weights + f.weights
-            if best_output > f.compute_output():
-                best_weights, best_output = f.weights, f.compute_output()
-            self.callback_(self, weights=f.weights, val=f.compute_output(X=X, y=y), grad=f.compute_jacobian(X=X, y=y),
-                           t=i, eta=eta, delta=delta)
+            if best_output > f.compute_output(X=X, y=y):
+                best_weights, best_output = f.weights, f.compute_output(X=X, y=y)
+            self.callback_(solver=self, weights=f.weights, val=f.compute_output(X=X, y=y),
+                           grad=f.compute_jacobian(X=X, y=y), t=i, eta=eta, delta=delta)
             i += 1
         if self.out_type_ == "best":
             return best_weights

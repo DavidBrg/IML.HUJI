@@ -88,7 +88,9 @@ class LogisticRegression(BaseEstimator):
         Fits model using specified `self.optimizer_` passed when instantiating class and includes an intercept
         if specified by `self.include_intercept_
         """
-        weights = np.random.normal(0, 1, size=(X.shape[0],)) * (1 / np.sqrt(X.shape[0]))
+        if self.include_intercept_:
+            X = np.insert(X, 0, 1, axis=1)
+        weights = np.random.randn(X.shape[1]) / np.sqrt(X.shape[1])
         if self.penalty_ == "l1":
             module = RegularizedModule(LogisticModule(weights), L1(weights), self.lam_, weights,
                                        self.include_intercept_)
@@ -113,7 +115,7 @@ class LogisticRegression(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        return np.where((X @ self.coefs_) >= self.alpha_, 1, 0)
+        return np.where(self.predict_proba(X) > self.alpha_, 1, 0)
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """
@@ -129,7 +131,9 @@ class LogisticRegression(BaseEstimator):
         probabilities: ndarray of shape (n_samples,)
             Probability of each sample being classified as `1` according to the fitted model
         """
-        return np.apply_along_axis(lambda x: 1 / (1 + np.exp(-x)), 0, X @ self.coefs_)
+        if self.include_intercept_:
+            X = np.insert(X, 0, np.ones(X.shape[0]), axis=1)
+        return 1 / (1 + np.exp(-X @ self.coefs_))
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """

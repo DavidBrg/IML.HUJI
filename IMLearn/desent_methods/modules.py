@@ -34,7 +34,7 @@ class L2(BaseModule):
         output: ndarray of shape (1,)
             Value of function at point self.weights
         """
-        return np.linalg.norm(self.weights_) ** 2
+        return np.linalg.norm(self.weights_, ord=2) ** 2
 
     def compute_jacobian(self, **kwargs) -> np.ndarray:
         """
@@ -133,7 +133,7 @@ class LogisticModule(BaseModule):
         output: ndarray of shape (1,)
             Value of function at point self.weights
         """
-        return - (1 / X.shape[0]) * np.sum((y * (X @ self.weights)) - np.log(1 + np.exp(X @ self.weights)))
+        return -(1 / X.shape[0]) * np.sum((y * (X @ self.weights)) - np.log(1 + np.exp(X @ self.weights)))
 
     def compute_jacobian(self, X: np.ndarray, y: np.ndarray, **kwargs) -> np.ndarray:
         """
@@ -152,7 +152,7 @@ class LogisticModule(BaseModule):
         output: ndarray of shape (n_features,)
             Derivative of function with respect to self.weights at point self.weights
         """
-        return (-1 / X.shape[0]) * ((y - np.exp(X @ self.weights) / (np.exp(X @ self.weights) + 1)) @ X)
+        return -(1 / X.shape[0]) * ((y - np.exp(X @ self.weights) / (np.exp(X @ self.weights) + 1)) @ X)
 
 
 class RegularizedModule(BaseModule):
@@ -194,7 +194,7 @@ class RegularizedModule(BaseModule):
         self.include_intercept_ = include_intercept
 
         if weights is not None:
-            self.weights(weights)
+            self.weights = weights
 
     def compute_output(self, **kwargs) -> np.ndarray:
         """
@@ -227,10 +227,8 @@ class RegularizedModule(BaseModule):
         output: ndarray of shape (n_in,)
             Derivative with respect to self.weights at point self.weights
         """
-        value = self.fidelity_module_.compute_jacobian(**kwargs)
-        i = 1 if self.include_intercept_ else 0
-        value[i:] = value[i:] + self.lam_ * self.regularization_module_.compute_jacobian(**kwargs)
-        return value
+        return self.fidelity_module_.compute_jacobian(**kwargs) + \
+               self.lam_ * np.insert(self.regularization_module_.compute_jacobian(**kwargs), 0, 0)
 
     @property
     def weights(self):
